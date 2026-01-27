@@ -238,6 +238,61 @@
         .ivu-message-notice-content-text {
             display: block !important;
         }
+
+        .search-box {
+            width: 94vw;
+            margin: 0 auto 12px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #dcdee2;
+            border-radius: 12px;
+            font-size: 15px;
+            color: #17233d;
+            background: #fff;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .search-input:focus {
+            border-color: #2d8cf0;
+            box-shadow: 0 0 0 2px rgba(45, 140, 240, 0.15);
+        }
+
+        .search-meta {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #808695;
+            padding: 0 4px;
+        }
+
+        .search-results {
+            width: 94vw;
+            margin: 0 auto;
+            padding-bottom: 40px;
+        }
+
+        .search-empty {
+            text-align: center;
+            color: #808695;
+            padding: 24px 0;
+        }
+
+        .search-card {
+            width: 100%;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            background: #fff;
+            border: none;
+            margin-bottom: 16px;
+        }
+
+        .option-static {
+            pointer-events: none;
+        }
         
         /* 针对大屏的优化 */
         @media screen and (min-width: 768px) {
@@ -250,7 +305,7 @@
                 background-color: #fff;
             }
             
-            .process, .timu {
+            .process, .timu, .search-box, .search-results {
                 width: 100%;
                 padding-left: 20px;
                 padding-right: 20px;
@@ -271,12 +326,34 @@
 </head>
 
 <body>
-    <div id="el">
+    <div id="el" :class="isSearchMode ? 'search-mode' : ''">
         <div class="top-bar">
-            <p class='process'>第 {{page+1}} / {{data.length}} 题</p>
+            <p class='process' v-if="!isSearchMode">第 {{page+1}} / {{data.length}} 题</p>
+            <p class='process' v-else>搜题模式</p>
             <div class="exit-btn" @click="goBack">退出</div>
         </div>
-        <Card class='timu'>
+        <div v-if="isSearchMode" class="search-box">
+            <input class="search-input" v-model.trim="searchQuery" placeholder="输入题目关键词（题干/选项）" />
+            <div class="search-meta" v-if="searchQuery">共匹配 {{searchMatchedCount}} 条，展示前 {{searchShownCount}} 条</div>
+        </div>
+        <div v-if="isSearchMode" class="search-results">
+            <div v-if="!searchQuery" class="search-empty">请输入关键词开始搜题</div>
+            <div v-else-if="searchMatchedCount === 0" class="search-empty">未找到相关题目</div>
+            <div v-else>
+                <Card v-for="q in limitedSearchResults" :key="q.id" class="search-card">
+                    <p slot="title">
+                        <label class='type' v-if="q.option && q.option.length">{{getQuestionTypeLabel(q)}}</label>{{q.title}}
+                    </p>
+                    <div v-if="q.option && q.option.length" class="option option-static">
+                        <div v-for="(opt,k) in q.option" v-key='k'>
+                            {{zidian[k]}}.{{opt}}</div>
+                    </div>
+                    <div class="answer">答案：{{q.answer}}</div>
+                    <div class="analysis">解析：{{q.analysis?q.analysis:'该答案暂无解析'}}</div>
+                </Card>
+            </div>
+        </div>
+        <Card v-if="!isSearchMode" class='timu'>
             <p slot="title">
                 <label class='type' v-if="timu.option">{{questionTypeLabel}}</label>{{timu.title}}
             </p>
@@ -296,11 +373,11 @@
             <div v-if='answer' class="analysis">解析：{{timu.analysis?timu.analysis:'该答案暂无解析'}}</div>
         </Card>
         
-        <div class="footer-actions">
+        <div v-if="!isSearchMode" class="footer-actions">
             <div class="action-container">
                 <i-button class="huida" type="primary" :disabled='daan.length===0' @click='huida' size="large" long>确定答案
                 </i-button>
-                <i-button class="huida" type="success" v-if='sessionStorage.type == "wrong"' @click='del' size="large" long>
+                <i-button class="huida" type="success" v-if='mode == "wrong"' @click='del' size="large" long>
                     我已学会，不再显示
                 </i-button>
                 <ButtonGroup class="pageControl">
@@ -330,9 +407,15 @@
                 zidian: ['A', 'B', 'C', 'D', 'E'],
                 daan: [],
                 answer: false,
-                result: false
+                result: false,
+                mode: '',
+                searchQuery: '',
+                maxSearchResults: 50
             },
             computed: {
+                isSearchMode() {
+                    return this.mode === 'search';
+                },
                 questionTypeLabel() {
                     const t = this.timu || {};
                     if (!t.option) {
@@ -351,9 +434,63 @@
                         return String(t.answer).length === 1 ? '单选' : '多选';
                     }
                     return String(t.answer).length > 16 ? '简答' : '填空';
+                },
+                searchResults() {
+                    if (!this.isSearchMode) {
+                        return [];
+                    }
+                    const q = this.normalizeText(this.searchQuery);
+                    if (!q) {
+                        return [];
+                    }
+                    const result = [];
+                    for (let i = 0; i < this.data.length; i++) {
+                        const item = this.data[i] || {};
+                        const text = this.getQuestionSearchText(item);
+                        if (text.indexOf(q) !== -1) {
+                            result.push(item);
+                        }
+                    }
+                    return result;
+                },
+                limitedSearchResults() {
+                    return this.searchResults.slice(0, this.maxSearchResults);
+                },
+                searchMatchedCount() {
+                    return this.searchResults.length;
+                },
+                searchShownCount() {
+                    return this.limitedSearchResults.length;
                 }
             },
             methods: {
+                normalizeText(text) {
+                    return String(text || '').toLowerCase().replace(/\s+/g, '');
+                },
+                getQuestionSearchText(question) {
+                    const title = question && question.title ? question.title : '';
+                    const optionText = Array.isArray(question && question.option) ? question.option.join(' ') : '';
+                    return this.normalizeText(title + ' ' + optionText);
+                },
+                getQuestionTypeLabel(question) {
+                    const t = question || {};
+                    if (!t.option) {
+                        return '';
+                    }
+                    if (t.type === 'judge') {
+                        return '判断';
+                    }
+                    if (t.type === 'single') {
+                        return '单选';
+                    }
+                    if (t.type === 'multi') {
+                        return '多选';
+                    }
+                    if (t.option.length) {
+                        return String(t.answer).length === 1 ? '单选' : '多选';
+                    }
+                    return String(t.answer).length > 16 ? '简答' : '填空';
+                },
                 select(k) {
                     if (this.daan.indexOf(k) != -1) {
                         this.daan.splice(this.daan.findIndex(item => item === k), 1);
@@ -443,15 +580,15 @@
                         this.result = 2;
                     }
                     //背题模式直接显示解析和答案
-                    if (sessionStorage.type == "recite") {
+                    if (this.mode == "recite") {
                         this.answer = true;
                         this.result = 3; //不显示结果框
                     }
                     // 记录答题题号
-                    if (sessionStorage.type === 'order') {
+                    if (this.mode === 'order') {
                         localStorage['order_' + this.fileId] = this.page
                     }
-                    if (sessionStorage.type === 'recite') {
+                    if (this.mode === 'recite') {
                         localStorage['recite_' + this.fileId] = this.page
                     }
                 },
@@ -488,29 +625,36 @@
             created() {
                 this.fileName = sessionStorage.file
                 this.fileId = sessionStorage.id
+                this.mode = sessionStorage.type || 'random'
+                sessionStorage.type = this.mode
                 if (!this.fileName) {
                     window.location.href = "./index.html"
                 }
                 axios.get('./json/' + this.fileName)
                     .then((response) => {
-                        this.data = response.data;
+                        this.data = response.data || [];
+
+                        if (this.isSearchMode) {
+                            return;
+                        }
                         //错题模式需要筛选题目
-                        if (sessionStorage.type == "wrong") {
+                        if (this.mode == "wrong") {
                             //如果没有错题
                             if (localStorage["wrong_" + this.fileId] && localStorage["wrong_" + this.fileId] != "[]") {
                                 this.data = this.wrongArray(this.data)
                             } else { //如果没有错题
                                 this.$Message.error('您暂时无错题记录，已自动为您选择乱序答题模式');
                                 sessionStorage.type = "random";
+                                this.mode = "random";
                             }
                         }
                         //乱序模式需要随机排序题目
-                        if (sessionStorage.type == "random") {
+                        if (this.mode == "random") {
                             this.data = this.randomArray(this.data)
                         }
 
-                        if (sessionStorage.type == "order" || sessionStorage.type == "recite") {
-                            this.recovery(sessionStorage.type)
+                        if (this.mode == "order" || this.mode == "recite") {
+                            this.recovery(this.mode)
                         }
 
                         //初始化题目
