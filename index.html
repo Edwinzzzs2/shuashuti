@@ -57,20 +57,92 @@
             padding-top: calc(40px + env(safe-area-inset-top));
         }
 
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            max-width: 920px;
+            margin: 0 auto;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 0 0 auto;
+        }
+
         .title {
-            text-align: center;
-            margin: 0 0 10px;
+            text-align: left;
+            margin: 0;
             color: #fff;
             font-size: 28px;
             font-weight: bold;
             text-shadow: 0 2px 4px rgba(0,0,0,0.1);
             cursor: pointer;
             user-select: none;
+            flex: 1;
+            min-width: 0;
         }
         
         .title:active {
             transform: scale(0.98);
             opacity: 0.9;
+        }
+
+        .header-actions {
+            margin-top: 0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .header-btn {
+            border-radius: 18px;
+            height: 36px;
+            padding: 0 14px;
+            font-weight: 500;
+        }
+
+        .import-row {
+            margin-bottom: 12px;
+        }
+
+        .import-file {
+            width: 100%;
+        }
+
+        .import-file-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .import-file-name {
+            font-size: 14px;
+            color: #515a6e;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .import-file-input {
+            position: absolute;
+            left: -9999px;
+            width: 0;
+            height: 0;
+            opacity: 0;
+        }
+
+        .import-status {
+            font-size: 12px;
+            color: #808695;
+            line-height: 1.5;
+            word-break: break-all;
         }
         
         .timuList {
@@ -121,12 +193,62 @@
             line-height: 1.5;
             height: auto;
         }
+
+        .bank-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .bank-title-left {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .bank-title-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .bank-title-actions {
+            display: flex;
+            align-items: center;
+            flex: 0 0 auto;
+        }
+
+        .bank-delete {
+            font-size: 20px;
+            color: #808695;
+            cursor: pointer;
+            transition: color 0.2s ease;
+            padding: 4px;
+        }
+
+        .bank-delete:hover {
+            color: #ed4014;
+        }
         
         .ivu-card-body {
             padding: 20px;
             color: #515a6e;
             font-size: 14px;
             line-height: 1.6;
+        }
+
+        .bank-desc {
+            color: #808695;
+            font-size: 14px;
+        }
+
+        /* 移动端输入框防放大 */
+        @media screen and (max-width: 767px) {
+            .ivu-input {
+                font-size: 16px !important;
+            }
         }
         
         /* 大屏适配 */
@@ -147,6 +269,10 @@
                 border-radius: 0;
                 margin-bottom: 0;
                 padding-bottom: 40px;
+            }
+
+            .title {
+                font-size: 30px;
             }
             
             .timuList {
@@ -171,38 +297,608 @@
 <body>
     <div id="el">
         <div class="header">
-            <h1 class='title' @click="refreshApp" title="点击刷新">爱刷题</h1>
+            <div class="header-top">
+                <h1 class='title' @click="refreshApp" title="点击刷新">爱刷题</h1>
+                <div class="header-right">
+                    <div class="header-actions">
+                        <i-button class="header-btn" type="default" @click="openImport">导入PDF题库</i-button>
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="timuList">
-            <div v-for="i in jsonList" @click='goNext(i.id,i.file)'>
+            <div v-for="i in jsonList" @click='goNext(i.id)'>
                 <Card class="timu">
                     <p slot="title">
-                        <Icon type="ios-book" style="margin-right: 8px; color: #2d8cf0"></Icon>{{i.name}}
+                        <span class="bank-title">
+                            <span class="bank-title-left">
+                                <Icon type="ios-book" style="margin-right: 8px; color: #2d8cf0"></Icon>
+                                <span class="bank-title-text">{{i.name}}</span>
+                            </span>
+                            <span class="bank-title-actions">
+                                <Icon type="ios-trash-outline" class="bank-delete" title="删除" @click.stop="deleteBank(i)"></Icon>
+                            </span>
+                        </span>
                     </p>
-                    {{i.describe}}
+                    <div class="bank-desc">{{getBankDescribe(i)}}</div>
                 </Card>
             </div>
 
         </div>
+        <Modal v-model="importVisible" title="导入PDF题库" :mask-closable="false">
+            <div style="padding: 8px 0;">
+                <div class="import-row">
+                    <p style="margin-bottom: 6px; color: #515a6e;">1. 题库名称</p>
+                    <i-input v-model.trim="importName" placeholder="例如：近代史纲要期末复习" style="width: 100%"></i-input>
+                </div>
+                <div class="import-row">
+                    <p style="margin-bottom: 6px; color: #515a6e;">2. 选择PDF文件</p>
+                    <div class="import-file-row">
+                        <i-button size="small" @click="triggerPdfPick">选择文件</i-button>
+                        <span class="import-file-name">{{ importFile ? importFile.name : '未选择文件' }}</span>
+                        <input ref="pdfInput" class="import-file-input" type="file" accept="application/pdf" @change="onPdfFileChange"/>
+                    </div>
+                </div>
+                <div v-if="importStatus" class="import-status" style="margin-top: 10px; padding: 8px; background: #f8f8f9; border-radius: 4px;">
+                    <Icon type="ios-information-circle-outline" style="margin-right: 4px;"></Icon>
+                    {{importStatus}}
+                </div>
+            </div>
+            <div slot="footer">
+                <i-button type="text" @click="closeImport" style="color: #808695">取消</i-button>
+                <i-button type="primary" :loading="importing" :disabled="!canImport" @click="doImportPdf">生成并导入</i-button>
+            </div>
+        </Modal>
         <div class="footer-note">
             本题库内容仅供学习交流使用，请以实际考试要求为准。
             <br>
             <a href="http://blog.adeyin.top" style="color: #909399; text-decoration: none; display: inline-block; margin-top: 5px;">@By Edwin</a>
         </div>
     </div>
-    <script src="./js/public.js?version=1.0"></script>
     <script src="./js/vue.min.js"></script>
     <script src="./js/iview.min.js"></script>
+    <script src="./js/data.js"></script>
+    <script src="./js/pdfjs/pdf.min.js"></script>
     <script>
         const vue = new Vue({
             el: "#el",
             data: {
-                jsonList: JSONList
+                jsonList: [],
+                importVisible: false,
+                importName: '',
+                importFile: null,
+                importing: false,
+                importStatus: ''
+            },
+            computed: {
+                canImport() {
+                    return !!(this.importName && this.importFile && !this.importing);
+                }
+            },
+            created() {
+                this.migrateLegacyCustomBanks();
+                this.refreshJsonList();
             },
             methods: {
-                goNext: function(id, file) {
+                getHiddenBuiltInList() {
+                    try {
+                        const raw = localStorage.getItem('hidden_built_in_list');
+                        const list = JSON.parse(raw || '[]');
+                        return Array.isArray(list) ? list : [];
+                    } catch (e) {
+                        return [];
+                    }
+                },
+                saveHiddenBuiltInList(list) {
+                    localStorage.setItem('hidden_built_in_list', JSON.stringify(list || []));
+                },
+                getExtraStore() {
+                    try {
+                        const raw = localStorage.getItem('datajs_extra_store');
+                        const store = JSON.parse(raw || '{"banks":[],"data":{}}');
+                        if (!store || typeof store !== 'object') {
+                            return { banks: [], data: {} };
+                        }
+                        if (!Array.isArray(store.banks)) {
+                            store.banks = [];
+                        }
+                        if (!store.data || typeof store.data !== 'object') {
+                            store.data = {};
+                        }
+                        return store;
+                    } catch (e) {
+                        return { banks: [], data: {} };
+                    }
+                },
+                saveExtraStore(store) {
+                    localStorage.setItem('datajs_extra_store', JSON.stringify(store || { banks: [], data: {} }));
+                },
+                getAllBanks() {
+                    const list = Array.isArray(window.BankList) ? window.BankList : [];
+                    return list.filter((x) => x && x.id && x.name);
+                },
+                normalizeBankId(name) {
+                    return String(name || '').replace(/\s+/g, ' ').trim();
+                },
+                hasBankId(id) {
+                    const bankId = this.normalizeBankId(id);
+                    if (!bankId) {
+                        return false;
+                    }
+                    const banks = this.getAllBanks();
+                    for (let i = 0; i < banks.length; i++) {
+                        if (this.normalizeBankId(banks[i].id) === bankId) {
+                            return true;
+                        }
+                    }
+                    return false;
+                },
+                migrateLegacyCustomBanks() {
+                    try {
+                        if (localStorage.getItem('datajs_migrated_v1') === '1') {
+                            return;
+                        }
+                        const raw = localStorage.getItem('custom_bank_list');
+                        const legacy = JSON.parse(raw || '[]');
+                        if (!Array.isArray(legacy) || !legacy.length) {
+                            localStorage.setItem('datajs_migrated_v1', '1');
+                            return;
+                        }
+                        const store = this.getExtraStore();
+                        const existed = {};
+                        const addedBanks = [];
+                        const addedData = {};
+                        const migratedLegacyIds = [];
+                        const all = this.getAllBanks();
+                        all.forEach((b) => {
+                            existed[this.normalizeBankId(b.id)] = true;
+                        });
+                        store.banks.forEach((b) => {
+                            if (b && b.id) {
+                                existed[this.normalizeBankId(b.id)] = true;
+                            }
+                        });
+
+                        for (let i = 0; i < legacy.length; i++) {
+                            const meta = legacy[i] || {};
+                            const bankId = this.normalizeBankId(meta.name);
+                            if (!bankId || existed[bankId]) {
+                                continue;
+                            }
+                            const legacyId = meta.id;
+                            const rawQuestions = localStorage.getItem(`custom_bank_${legacyId}`);
+                            if (!rawQuestions) {
+                                continue;
+                            }
+                            const questions = JSON.parse(rawQuestions || '[]');
+                            if (!Array.isArray(questions) || !questions.length) {
+                                continue;
+                            }
+                            existed[bankId] = true;
+                            const nextMeta = {
+                                id: bankId,
+                                name: bankId,
+                                describe: '',
+                                pdfName: meta.pdfName || '',
+                                count: typeof meta.count === 'number' ? meta.count : questions.length,
+                                file: bankId,
+                                source: 'import'
+                            };
+                            store.banks.push(nextMeta);
+                            store.data[bankId] = questions;
+                            addedBanks.push(nextMeta);
+                            addedData[bankId] = questions;
+                            migratedLegacyIds.push(legacyId);
+                        }
+
+                        this.saveExtraStore(store);
+                        if (!Array.isArray(window.BankList)) {
+                            window.BankList = [];
+                        }
+                        window.BankList = window.BankList.concat(addedBanks);
+                        window.QuestionData = Object.assign({}, window.QuestionData || {}, addedData);
+                        if (migratedLegacyIds.length) {
+                            for (let i = 0; i < migratedLegacyIds.length; i++) {
+                                try {
+                                    localStorage.removeItem(`custom_bank_${migratedLegacyIds[i]}`);
+                                } catch (e) {}
+                            }
+                        }
+                        try {
+                            localStorage.removeItem('custom_bank_list');
+                        } catch (e) {}
+                        localStorage.setItem('datajs_migrated_v1', '1');
+                    } catch (e) {}
+                },
+                refreshJsonList() {
+                    const hidden = this.getHiddenBuiltInList();
+                    const banks = this.getAllBanks();
+                    this.jsonList = banks.filter((x) => hidden.indexOf(x.id) === -1);
+                },
+                getBankDescribe(item) {
+                    const pdfName = item && item.pdfName ? String(item.pdfName) : '';
+                    const count = typeof item.count === 'number' ? item.count : null;
+                    if (pdfName && typeof count === 'number') {
+                        return `${pdfName}（共 ${count} 题）`;
+                    }
+                    if (pdfName) {
+                        return pdfName;
+                    }
+                    return item && item.describe ? item.describe : '';
+                },
+                deleteBank(item) {
+                    const id = item.id;
+                    const isBuiltIn = item && item.source === 'builtIn';
+                    this.$Modal.confirm({
+                        title: '删除题库',
+                        content: `确定删除题库“${item.name}”吗？${isBuiltIn ? '删除后将从列表中移除。' : '删除后不可恢复。'}`,
+                        onOk: () => {
+                            try {
+                                if (isBuiltIn) {
+                                    const hidden = this.getHiddenBuiltInList();
+                                    if (hidden.indexOf(id) === -1) {
+                                        hidden.push(id);
+                                        this.saveHiddenBuiltInList(hidden);
+                                    }
+                                } else {
+                                    const store = this.getExtraStore();
+                                    store.banks = (store.banks || []).filter((b) => b && b.id !== id);
+                                    if (store.data && store.data[id]) {
+                                        delete store.data[id];
+                                    }
+                                    this.saveExtraStore(store);
+                                    localStorage.removeItem(`wrong_${id}`);
+                                    localStorage.removeItem(`order_${id}`);
+                                    localStorage.removeItem(`recite_${id}`);
+                                    if (Array.isArray(window.BankList)) {
+                                        window.BankList = window.BankList.filter((b) => b && b.id !== id);
+                                    }
+                                    if (window.QuestionData && window.QuestionData[id]) {
+                                        delete window.QuestionData[id];
+                                    }
+                                }
+                                this.refreshJsonList();
+                                this.$Message.success('删除成功');
+                            } catch (e) {
+                                try {
+                                    this.$Message.error('删除失败');
+                                } catch (err) {}
+                            }
+                        }
+                    });
+                },
+                openImport() {
+                    this.importVisible = true;
+                    this.importStatus = '';
+                    this.importing = false;
+                    this.importFile = null;
+                    this.importName = '';
+                    this.$nextTick(() => {
+                        const input = this.$refs && this.$refs.pdfInput ? this.$refs.pdfInput : null;
+                        if (input) {
+                            input.value = '';
+                        }
+                    });
+                },
+                closeImport() {
+                    if (this.importing) {
+                        return;
+                    }
+                    this.importVisible = false;
+                },
+                triggerPdfPick() {
+                    const input = this.$refs && this.$refs.pdfInput ? this.$refs.pdfInput : null;
+                    if (input) {
+                        input.click();
+                    }
+                },
+                onPdfFileChange(e) {
+                    const files = e && e.target ? e.target.files : null;
+                    this.importFile = files && files.length ? files[0] : null;
+                },
+                normalizeText(text) {
+                    let s = String(text || '');
+                    s = s.replace(/\u00a0/g, ' ').replace(/\r/g, '\n');
+                    s = s.replace(/\s+/g, ' ').trim();
+                    s = s.replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g, '$1$2');
+                    return s;
+                },
+                findSection(text, startMarkers, endMarkers) {
+                    let startIdx = -1;
+                    for (let i = 0; i < startMarkers.length; i++) {
+                        const marker = startMarkers[i];
+                        const idx = text.indexOf(marker);
+                        if (idx !== -1) {
+                            startIdx = idx + marker.length;
+                            break;
+                        }
+                    }
+                    if (startIdx === -1) {
+                        return '';
+                    }
+                    const endCandidates = [];
+                    for (let i = 0; i < endMarkers.length; i++) {
+                        const marker = endMarkers[i];
+                        const idx = text.indexOf(marker, startIdx);
+                        if (idx !== -1) {
+                            endCandidates.push(idx);
+                        }
+                    }
+                    const endIdx = endCandidates.length ? Math.min.apply(null, endCandidates) : text.length;
+                    return text.slice(startIdx, endIdx);
+                },
+                findSectionByRegex(text, startRegexList, endRegexList) {
+                    let startMatch = null;
+                    for (let i = 0; i < startRegexList.length; i++) {
+                        const re = startRegexList[i];
+                        const m = re.exec(text);
+                        if (m) {
+                            startMatch = { index: m.index, length: m[0].length };
+                            break;
+                        }
+                    }
+                    if (!startMatch) {
+                        return '';
+                    }
+                    const startIdx = startMatch.index + startMatch.length;
+                    const endCandidates = [];
+                    for (let i = 0; i < endRegexList.length; i++) {
+                        const re = endRegexList[i];
+                        re.lastIndex = 0;
+                        const rest = text.slice(startIdx);
+                        const m = re.exec(rest);
+                        if (m) {
+                            endCandidates.push(startIdx + m.index);
+                        }
+                    }
+                    const endIdx = endCandidates.length ? Math.min.apply(null, endCandidates) : text.length;
+                    return text.slice(startIdx, endIdx);
+                },
+                normalizeLetter(ch) {
+                    const mapping = {
+                        'Ａ': 'A',
+                        'Ｂ': 'B',
+                        'Ｃ': 'C',
+                        'Ｄ': 'D',
+                        'Ｅ': 'E',
+                        'Ｆ': 'F',
+                        'Ｇ': 'G',
+                        'Ｈ': 'H'
+                    };
+                    return mapping[ch] || ch;
+                },
+                extractAnswer(block) {
+                    const re = /[（(]\s*([A-HＡ-Ｈ\s]+)\s*[）)]/g;
+                    let last = null;
+                    let match = null;
+                    while ((match = re.exec(block)) !== null) {
+                        last = match;
+                    }
+                    if (!last) {
+                        return { answer: '', cleaned: block };
+                    }
+                    const raw = last[1] || '';
+                    const letters = [];
+                    for (let i = 0; i < raw.length; i++) {
+                        let ch = raw[i];
+                        if (/\s/.test(ch)) {
+                            continue;
+                        }
+                        ch = this.normalizeLetter(ch.toUpperCase());
+                        if (ch >= 'A' && ch <= 'H') {
+                            letters.push(ch);
+                        }
+                    }
+                    const answer = letters.join('');
+                    const cleaned = block.slice(0, last.index) + block.slice(last.index + last[0].length);
+                    return { answer, cleaned };
+                },
+                splitOptions(block) {
+                    const startMatch = block.match(/[A-HＡ-Ｈ]\s*[、\.．]/);
+                    if (!startMatch || startMatch.index == null) {
+                        return [];
+                    }
+                    const optionsText = block.slice(startMatch.index);
+                    const parts = optionsText.split(/([A-HＡ-Ｈ]\s*[、\.．])/g);
+                    const options = [];
+                    let currentLabel = '';
+                    let currentText = '';
+                    for (let i = 0; i < parts.length; i++) {
+                        const part = parts[i];
+                        if (!part) {
+                            continue;
+                        }
+                        if (/^[A-HＡ-Ｈ]\s*[、\.．]$/.test(part)) {
+                            if (currentLabel) {
+                                const t = this.normalizeText(currentText);
+                                if (t) {
+                                    options.push(t);
+                                }
+                            }
+                            currentLabel = part;
+                            currentText = '';
+                        } else {
+                            currentText += part;
+                        }
+                    }
+                    if (currentLabel) {
+                        const t = this.normalizeText(currentText);
+                        if (t) {
+                            options.push(t);
+                        }
+                    }
+                    return options;
+                },
+                parseJudgeSection(text, prefix) {
+                    const re = /(\d+)\s*[、\.．]\s*[（(]?\s*(√|×)\s*[）)]?/g;
+                    const matches = [];
+                    let m = null;
+                    while ((m = re.exec(text)) !== null) {
+                        matches.push({ index: m.index, len: m[0].length, qnum: m[1], sign: m[2] });
+                    }
+                    const items = [];
+                    for (let i = 0; i < matches.length; i++) {
+                        const cur = matches[i];
+                        const start = cur.index + cur.len;
+                        const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+                        let title = text.slice(start, end);
+                        title = title.replace(/^[。 、，\n\r\t]+/, '');
+                        title = this.normalizeText(title);
+                        if (!title) {
+                            continue;
+                        }
+                        const answer = cur.sign === '√' ? 'A' : 'B';
+                        items.push({
+                            id: `${prefix}-J${cur.qnum}`,
+                            title,
+                            type: 'judge',
+                            option: ['正确', '错误'],
+                            answer,
+                            analysis: ''
+                        });
+                    }
+                    return items;
+                },
+                parseChoiceSection(text, sectionType, idPrefix, prefix) {
+                    const re = /(\d+)\s*[、\.．]/g;
+                    const matches = [];
+                    let m = null;
+                    while ((m = re.exec(text)) !== null) {
+                        matches.push({ index: m.index, len: m[0].length, qnum: m[1] });
+                    }
+                    const items = [];
+                    for (let i = 0; i < matches.length; i++) {
+                        const cur = matches[i];
+                        const start = cur.index + cur.len;
+                        const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+                        const block = text.slice(start, end).trim();
+                        if (!block) {
+                            continue;
+                        }
+                        const { answer, cleaned } = this.extractAnswer(block);
+                        if (!answer) {
+                            continue;
+                        }
+                        const options = this.splitOptions(cleaned);
+                        if (!options.length) {
+                            continue;
+                        }
+                        const stemMatch = cleaned.match(/[A-HＡ-Ｈ]\s*[、\.．]/);
+                        let title = stemMatch && stemMatch.index != null ? cleaned.slice(0, stemMatch.index) : cleaned;
+                        title = this.normalizeText(title);
+                        if (!title) {
+                            continue;
+                        }
+                        items.push({
+                            id: `${prefix}-${idPrefix}${cur.qnum}`,
+                            title,
+                            type: sectionType,
+                            option: options,
+                            answer,
+                            analysis: ''
+                        });
+                    }
+                    return items;
+                },
+                async extractPdfText(file) {
+                    if (!window.pdfjsLib) {
+                        throw new Error('PDF 解析组件未加载');
+                    }
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = './js/pdfjs/pdf.worker.min.js';
+                    const arrayBuffer = await file.arrayBuffer();
+                    const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+                    const pdf = await loadingTask.promise;
+                    const pages = [];
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        const strings = (content.items || []).map((it) => it && it.str ? it.str : '');
+                        pages.push(strings.join(' '));
+                    }
+                    return pages.join('\n');
+                },
+                buildQuestionsFromText(fullText, prefix) {
+                    const judgeText = this.findSectionByRegex(
+                        fullText,
+                        [/一\s*、\s*判断题/],
+                        [/二\s*、\s*(选择题|单选题)/]
+                    );
+                    const singleText = this.findSectionByRegex(
+                        fullText,
+                        [/二\s*、\s*(选择题|单选题)/],
+                        [/三\s*、\s*(选择题|多选题|多项选择题)/]
+                    );
+                    const multiText = this.findSectionByRegex(
+                        fullText,
+                        [/三\s*、\s*(选择题|多选题|多项选择题)/],
+                        [/四\s*、/]
+                    );
+                    const judgeItems = judgeText ? this.parseJudgeSection(judgeText, prefix) : [];
+                    const singleItems = singleText ? this.parseChoiceSection(singleText, 'single', 'S', prefix) : [];
+                    const multiItems = multiText ? this.parseChoiceSection(multiText, 'multi', 'M', prefix) : [];
+                    return judgeItems.concat(singleItems, multiItems);
+                },
+                async doImportPdf() {
+                    if (!this.canImport) {
+                        return;
+                    }
+                    this.importing = true;
+                    this.importStatus = '正在解析PDF...';
+                    try {
+                        const bankId = this.normalizeBankId(this.importName);
+                        if (!bankId) {
+                            throw new Error('请输入题库名称');
+                        }
+                        if (this.hasBankId(bankId)) {
+                            throw new Error('题库名称已存在，请换一个名称（题库名称将作为题库ID）');
+                        }
+                        const text = await this.extractPdfText(this.importFile);
+                        this.importStatus = '正在生成题库...';
+                        const items = this.buildQuestionsFromText(text, bankId);
+                        if (!items.length) {
+                            throw new Error('未解析到题目：已读取PDF文本，但未匹配到分节或题目结构（请确认包含“一、判断题/二、选择题/三、选择题”等标题，且题目含选项A、B、C、D与答案标注）');
+                        }
+                        const meta = {
+                            id: bankId,
+                            name: bankId,
+                            describe: '',
+                            pdfName: this.importFile ? this.importFile.name : '',
+                            count: items.length,
+                            file: bankId,
+                            source: 'import'
+                        };
+                        const store = this.getExtraStore();
+                        store.data[bankId] = items;
+                        store.banks = (store.banks || []).filter((b) => b && b.id !== bankId);
+                        store.banks.unshift(meta);
+                        this.saveExtraStore(store);
+
+                        if (!Array.isArray(window.BankList)) {
+                            window.BankList = [];
+                        }
+                        window.BankList = window.BankList.filter((b) => b && b.id !== bankId).concat([meta]);
+                        if (!window.QuestionData || typeof window.QuestionData !== 'object') {
+                            window.QuestionData = {};
+                        }
+                        window.QuestionData[bankId] = items;
+                        this.refreshJsonList();
+                        this.importStatus = `生成成功：共 ${items.length} 题，已加入首页题库列表`;
+                        try {
+                            this.$Message.success('题库已生成并加入列表');
+                        } catch (e) {}
+                        this.importVisible = false;
+                    } catch (e) {
+                        this.importStatus = String(e && e.message ? e.message : e);
+                        try {
+                            this.$Message.error('导入失败');
+                        } catch (err) {}
+                    } finally {
+                        this.importing = false;
+                    }
+                },
+                goNext: function(id) {
                     sessionStorage.id = id;
-                    sessionStorage.file = file;
+                    sessionStorage.file = id;
                     window.location.href = "./type.html"
                 },
                 refreshApp: function() {

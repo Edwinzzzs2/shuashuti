@@ -249,7 +249,7 @@
             padding: 12px 14px;
             border: 1px solid #dcdee2;
             border-radius: 12px;
-            font-size: 15px;
+            font-size: 16px;
             color: #17233d;
             background: #fff;
             outline: none;
@@ -391,7 +391,7 @@
             </div>
         </div>
     </div>
-    <script src="./js/public.js?version=1.0"></script>
+    <script src="./js/data.js"></script>
     <script src="./js/vue.min.js"></script>
     <script src="./js/iview.min.js"></script>
     <script src="./js/axios.min.js"></script>
@@ -623,45 +623,64 @@
                 }
             },
             created() {
-                this.fileName = sessionStorage.file
-                this.fileId = sessionStorage.id
+                this.fileName = sessionStorage.file || sessionStorage.id
+                this.fileId = sessionStorage.id || sessionStorage.file
                 this.mode = sessionStorage.type || 'random'
                 sessionStorage.type = this.mode
                 if (!this.fileName) {
                     window.location.href = "./index.html"
                 }
-                axios.get('./json/' + this.fileName)
+                const afterLoad = () => {
+                    if (this.isSearchMode) {
+                        return;
+                    }
+                    if (this.mode == "wrong") {
+                        if (localStorage["wrong_" + this.fileId] && localStorage["wrong_" + this.fileId] != "[]") {
+                            this.data = this.wrongArray(this.data)
+                        } else {
+                            this.$Message.error('您暂时无错题记录，已自动为您选择乱序答题模式');
+                            sessionStorage.type = "random";
+                            this.mode = "random";
+                        }
+                    }
+                    if (this.mode == "random") {
+                        this.data = this.randomArray(this.data)
+                    }
+
+                    if (this.mode == "order" || this.mode == "recite") {
+                        this.recovery(this.mode)
+                    }
+
+                    this.initTimu();
+                }
+                if (String(this.fileName || '').indexOf('local:') === 0) {
+                    try {
+                        const key1 = "custom_bank_" + this.fileId;
+                        const key2 = "custom_bank_" + String(this.fileName).slice(6);
+                        const raw = localStorage.getItem(key1) || localStorage.getItem(key2) || "[]";
+                        this.data = JSON.parse(raw) || [];
+                    } catch (e) {
+                        this.data = [];
+                    }
+                    afterLoad();
+                    return;
+                }
+                // 优先从内存(data.js)加载
+                if (window.QuestionData && (window.QuestionData[this.fileId] || window.QuestionData[this.fileName])) {
+                    this.data = window.QuestionData[this.fileId] || window.QuestionData[this.fileName];
+                    afterLoad();
+                    return;
+                }
+                const jsonPath = String(this.fileName).endsWith('.json') ? this.fileName : (this.fileName + '.json');
+                axios.get('./json/' + jsonPath)
                     .then((response) => {
                         this.data = response.data || [];
-
-                        if (this.isSearchMode) {
-                            return;
-                        }
-                        //错题模式需要筛选题目
-                        if (this.mode == "wrong") {
-                            //如果没有错题
-                            if (localStorage["wrong_" + this.fileId] && localStorage["wrong_" + this.fileId] != "[]") {
-                                this.data = this.wrongArray(this.data)
-                            } else { //如果没有错题
-                                this.$Message.error('您暂时无错题记录，已自动为您选择乱序答题模式');
-                                sessionStorage.type = "random";
-                                this.mode = "random";
-                            }
-                        }
-                        //乱序模式需要随机排序题目
-                        if (this.mode == "random") {
-                            this.data = this.randomArray(this.data)
-                        }
-
-                        if (this.mode == "order" || this.mode == "recite") {
-                            this.recovery(this.mode)
-                        }
-
-                        //初始化题目
-                        this.initTimu();
+                        afterLoad();
                     })
-                    .catch(function (error) {
-                        this.$Message.error('发生错误！');
+                    .catch((error) => {
+                        try {
+                            this.$Message.error('发生错误！');
+                        } catch (e) {}
                     });
             }
         })

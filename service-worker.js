@@ -1,10 +1,12 @@
-const CACHE_NAME = "aishuati-cache-v2";
+const CACHE_NAME = "aishuati-cache-v5";
 const OFFLINE_URLS = [
   "/",
   "/index.html",
   "/css/iview.css",
   "/js/vue.min.js",
-  "/js/iview.min.js"
+  "/js/iview.min.js",
+  "/js/pdfjs/pdf.min.js",
+  "/js/pdfjs/pdf.worker.min.js"
 ];
 
 self.addEventListener("install", event => {
@@ -45,7 +47,7 @@ self.addEventListener("fetch", event => {
       fetch(event.request)
         .then(response => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
           return response;
         })
         .catch(() => {
@@ -62,7 +64,7 @@ self.addEventListener("fetch", event => {
       }
       return fetch(event.request).then(response => {
         const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
         return response;
       });
     })
