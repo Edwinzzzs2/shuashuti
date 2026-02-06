@@ -69,6 +69,59 @@
             background-color: #f8f8f9;
             opacity: 1;
         }
+        
+        .view-btn {
+            position: static;
+            font-size: 13px;
+            color: #2d8cf0;
+            cursor: pointer;
+            padding: 4px 12px;
+            border-radius: 12px;
+            border: 1px solid #2d8cf0;
+            background-color: #fff;
+            box-shadow: none;
+            z-index: 10;
+            margin-left: 8px;
+        }
+        
+        .view-btn:active {
+            background-color: #f0faff;
+            opacity: 1;
+        }
+        
+        .raw-container {
+            max-height: 70vh;
+            overflow: auto;
+            padding: 8px;
+        }
+        .raw-card {
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: none;
+            background: #fff;
+            border: 1px solid #e8eaec;
+            margin-bottom: 10px;
+        }
+        .raw-option div {
+            padding: 10px 12px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .raw-answer {
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .raw-analysis {
+            margin-top: 6px;
+            padding: 8px;
+            font-size: 13px;
+        }
+        .raw-type-label {
+            font-size: 11px;
+            padding: 1px 6px;
+            margin-right: 6px;
+        }
 
         .timu {
             width: 94vw;
@@ -330,7 +383,10 @@
         <div class="top-bar">
             <p class='process' v-if="!isSearchMode">第 {{page+1}} / {{data.length}} 题</p>
             <p class='process' v-else>搜题模式</p>
-            <div class="exit-btn" @click="goBack">退出</div>
+            <div style="display:flex; align-items:center;">
+                <div class="exit-btn" @click="goBack">退出</div>
+                <div v-if="isSearchMode" class="view-btn" @click="openRaw">查看原文</div>
+            </div>
         </div>
         <div v-if="isSearchMode" class="search-box">
             <input class="search-input" v-model.trim="searchQuery" placeholder="输入题目关键词（题干/选项）" />
@@ -353,6 +409,21 @@
                 </Card>
             </div>
         </div>
+        <Modal v-model="rawVisible" title="试卷原文" :mask-closable="true">
+            <div class="raw-container">
+                <Card v-for="q in data" :key="q.id" class="raw-card">
+                    <p slot="title">
+                        <label class='type raw-type-label' v-if="q.option && q.option.length">{{getQuestionTypeLabel(q)}}</label>{{q.title}}
+                    </p>
+                    <div v-if="q.option && q.option.length" class="option option-static raw-option">
+                        <div v-for="(opt,k) in q.option" v-key='k'>
+                            {{zidian[k]}}.{{opt}}</div>
+                    </div>
+                    <div class="answer raw-answer">答案：{{q.answer}}</div>
+                    <div class="analysis raw-analysis">解析：{{q.analysis?q.analysis:'该答案暂无解析'}}</div>
+                </Card>
+            </div>
+        </Modal>
         <Card v-if="!isSearchMode" class='timu'>
             <p slot="title">
                 <label class='type' v-if="timu.option">{{questionTypeLabel}}</label>{{timu.title}}
@@ -410,7 +481,8 @@
                 result: false,
                 mode: '',
                 searchQuery: '',
-                maxSearchResults: 50
+                maxSearchResults: 50,
+                rawVisible: false
             },
             computed: {
                 isSearchMode() {
@@ -620,6 +692,9 @@
                 },
                 goBack() {
                     window.location.href = "/"
+                },
+                openRaw() {
+                    this.rawVisible = true;
                 }
             },
             created() {

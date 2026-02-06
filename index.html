@@ -103,6 +103,53 @@
             height: 36px;
             padding: 0 14px;
             font-weight: 500;
+            background-color: rgba(255, 255, 255, 0.2) !important;
+            border-color: rgba(255, 255, 255, 0.6) !important;
+            color: #fff !important;
+            box-shadow: none !important;
+        }
+        .header-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3) !important;
+            border-color: rgba(255, 255, 255, 0.8) !important;
+        }
+        .custom-section {
+            padding: 8px 0;
+        }
+        .custom-label {
+            font-size: 15px;
+            color: #17233d;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .custom-radios {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px 16px;
+            padding: 8px 12px;
+            background: #f8f8f9;
+            border-radius: 8px;
+        }
+        .custom-radio {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: #515a6e;
+        }
+        .custom-default-tip {
+            color: #808695;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .custom-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        .clear-default {
+            color: #ed4014;
+            cursor: pointer;
         }
 
         .import-row {
@@ -302,6 +349,7 @@
                 <div class="header-right">
                     <div class="header-actions">
                         <i-button class="header-btn" type="default" @click="openImport">导入PDF题库</i-button>
+                        <i-button class="header-btn" type="default" @click="openModeConfig">自定义模式</i-button>
                     </div>
                 </div>
             </div>
@@ -349,6 +397,25 @@
                 <i-button type="primary" :loading="importing" :disabled="!canImport" @click="doImportPdf">生成并导入</i-button>
             </div>
         </Modal>
+        <Modal v-model="modeConfigVisible" title="自定义答题模式" :mask-closable="false">
+            <div class="custom-section">
+                <div class="custom-label">默认模式（单选）</div>
+                <div class="custom-radios">
+                    <label v-for="i in getValidTypes()" :key="'home-radio-'+i.id" class="custom-radio">
+                        <input type="radio" name="homeDefaultType" :value="i.id" v-model="homeDefaultSelect">
+                        <span>{{i.name}}</span>
+                    </label>
+                </div>
+                <div v-if="homeDefaultType" class="custom-default-tip">当前默认：{{getTypeNameByList(getValidTypes(), homeDefaultType)}}</div>
+            </div>
+            <div slot="footer" class="custom-footer">
+                <span class="clear-default" @click="clearDefault">清除默认模式</span>
+                <div>
+                    <i-button type="text" @click="closeModeConfig" style="color: #808695">取消</i-button>
+                    <i-button type="primary" @click="saveModeConfig">保存设置</i-button>
+                </div>
+            </div>
+        </Modal>
         <div class="footer-note">
             本题库内容仅供学习交流使用，请以实际考试要求为准。
             <br>
@@ -368,7 +435,10 @@
                 importName: '',
                 importFile: null,
                 importing: false,
-                importStatus: ''
+                importStatus: '',
+                modeConfigVisible: false,
+                homeDefaultType: '',
+                homeDefaultSelect: 'random'
             },
             computed: {
                 canImport() {
@@ -378,8 +448,26 @@
             created() {
                 this.migrateLegacyCustomBanks();
                 this.refreshJsonList();
+                const stored = localStorage.getItem('default_type') || '';
+                this.homeDefaultType = stored;
+                this.homeDefaultSelect = stored || '';
             },
             methods: {
+                getValidTypes() {
+                    return [
+                        { id: 'random', name: '乱序答题' },
+                        { id: 'order', name: '顺序答题' },
+                        { id: 'search', name: '搜题模式' },
+                        { id: 'recite', name: '背题模式' },
+                        { id: 'wrong', name: '错题模式' }
+                    ];
+                },
+                getTypeNameByList(list, id) {
+                    for (let i = 0; i < list.length; i++) {
+                        if (list[i].id === id) return list[i].name;
+                    }
+                    return id || '';
+                },
                 getHiddenBuiltInList() {
                     try {
                         const raw = localStorage.getItem('hidden_built_in_list');
@@ -896,9 +984,46 @@
                         this.importing = false;
                     }
                 },
+                openModeConfig() {
+                    const stored = localStorage.getItem('default_type') || '';
+                    this.homeDefaultType = stored;
+                    this.homeDefaultSelect = stored || '';
+                    this.modeConfigVisible = true;
+                },
+                closeModeConfig() {
+                    this.modeConfigVisible = false;
+                },
+                saveModeConfig() {
+                    if (this.homeDefaultSelect) {
+                        localStorage.setItem('default_type', this.homeDefaultSelect);
+                        this.homeDefaultType = this.homeDefaultSelect;
+                        try { this.$Message.success('默认模式已更新'); } catch (e) {}
+                    } else {
+                        localStorage.removeItem('default_type');
+                        this.homeDefaultType = '';
+                        try { this.$Message.success('已清除默认模式'); } catch (e) {}
+                    }
+                    this.modeConfigVisible = false;
+                },
+                clearDefault() {
+                    localStorage.removeItem('default_type');
+                    this.homeDefaultType = '';
+                    this.homeDefaultSelect = '';
+                    try { this.$Message.success('已清除默认模式'); } catch (e) {}
+                },
                 goNext: function(id) {
                     sessionStorage.id = id;
                     sessionStorage.file = id;
+                    const defaultType = localStorage.getItem('default_type');
+                    const validTypes = ['random', 'order', 'search', 'recite', 'wrong'];
+                    if (defaultType && validTypes.indexOf(defaultType) !== -1) {
+                        sessionStorage.type = defaultType;
+                        window.location.href = "./timu.html"
+                        return;
+                    }
+                    if (defaultType && validTypes.indexOf(defaultType) === -1) {
+                        localStorage.removeItem('default_type');
+                    }
                     window.location.href = "./type.html"
                 },
                 refreshApp: function() {
