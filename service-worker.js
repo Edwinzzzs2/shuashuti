@@ -1,7 +1,9 @@
-const CACHE_NAME = "aishuati-cache-v5";
+const CACHE_NAME = "aishuati-cache-v6";
 const OFFLINE_URLS = [
   "/",
   "/index.html",
+  "/type.html",
+  "/timu.html",
   "/css/iview.css",
   "/js/vue.min.js",
   "/js/iview.min.js",
