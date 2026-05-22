@@ -59,12 +59,58 @@ python parse_choice_111.py -i "../json/tiku.txt" -o "../json/tiku.json" -p "2024
 *   `-o`: 输出的 JSON 文件路径。
 *   `-p`: 题目前缀 ID（用于区分不同题库的题目）。
 
-### 2. 配置题库
+### 2. 导入题库
+
+首页点击「导入题库」可以直接导入 PDF 或 JSON 文件：
+
+- **PDF 导入**：适合从题库 PDF 自动解析题目，要求 PDF 文本包含“一、判断题 / 二、单选题 / 三、多选题”等分节标题。
+- **JSON 导入**：适合导入已经转换好的题库文件，例如 `json/202601.json`、`json/202602.json` 这种题目数组。
+
+JSON 支持直接使用题目数组：
+
+```json
+[
+  {
+    "id": "2026Q1-J1",
+    "title": "冬季施工场地必须做好排水措施，防止现场结冰。",
+    "type": "judge",
+    "option": ["正确", "错误"],
+    "answer": "A",
+    "analysis": ""
+  }
+]
+```
+
+也支持带外层对象的格式，题目数组字段可以是 `questions`、`data` 或 `items`：
+
+```json
+{
+  "questions": [
+    {
+      "id": "demo-S1",
+      "title": "这是一个单选题？",
+      "type": "single",
+      "option": ["选项一", "选项二", "选项三", "选项四"],
+      "answer": "A",
+      "analysis": ""
+    }
+  ]
+}
+```
+
+题目字段要求：
+
+- `title`：题干。
+- `type`：题型，支持 `judge`、`single`、`multi`。
+- `option`：选项数组，判断题通常为 `["正确", "错误"]`。
+- `answer`：答案，判断题使用 `A/B`，选择题使用选项字母，例如 `A` 或 `ABC`。
+
+### 3. 配置内置题库
 
 生成的 JSON 文件（例如 `202601.json`）需要放入 `json/` 目录。
 然后修改 `index.html` 中的代码，将题库文件名指向新的 JSON 文件（如果需要动态加载不同题库，可能需要修改 `index.html` 的逻辑，目前默认为加载 `202601.json`）。
 
-### 3. 运行项目
+### 4. 运行项目
 
 由于项目使用了 PWA (Service Worker) 和 Fetch API 加载本地 JSON，**不能**直接双击 HTML 文件打开，必须通过 HTTP 服务器运行。
 

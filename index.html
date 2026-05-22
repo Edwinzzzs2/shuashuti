@@ -348,7 +348,7 @@
                 <h1 class='title' @click="refreshApp" title="点击刷新">爱刷题</h1>
                 <div class="header-right">
                     <div class="header-actions">
-                        <i-button class="header-btn" type="default" @click="openImport">导入PDF题库</i-button>
+                        <i-button class="header-btn" type="default" @click="openImport">导入题库</i-button>
                         <i-button class="header-btn" type="default" @click="openModeConfig">自定义模式</i-button>
                     </div>
                 </div>
@@ -373,18 +373,18 @@
             </div>
 
         </div>
-        <Modal v-model="importVisible" title="导入PDF题库" :mask-closable="false">
+        <Modal v-model="importVisible" title="导入题库" :mask-closable="false">
             <div style="padding: 8px 0;">
                 <div class="import-row">
                     <p style="margin-bottom: 6px; color: #515a6e;">1. 题库名称</p>
                     <i-input v-model.trim="importName" placeholder="例如：近代史纲要期末复习" style="width: 100%"></i-input>
                 </div>
                 <div class="import-row">
-                    <p style="margin-bottom: 6px; color: #515a6e;">2. 选择PDF文件</p>
+                    <p style="margin-bottom: 6px; color: #515a6e;">2. 选择PDF或JSON文件</p>
                     <div class="import-file-row">
-                        <i-button size="small" @click="triggerPdfPick">选择文件</i-button>
+                        <i-button size="small" @click="triggerImportPick">选择文件</i-button>
                         <span class="import-file-name">{{ importFile ? importFile.name : '未选择文件' }}</span>
-                        <input ref="pdfInput" class="import-file-input" type="file" accept="application/pdf" @change="onPdfFileChange"/>
+                        <input ref="importInput" class="import-file-input" type="file" accept=".pdf,.json,application/pdf,application/json" @change="onImportFileChange"/>
                     </div>
                 </div>
                 <div v-if="importStatus" class="import-status" style="margin-top: 10px; padding: 8px; background: #f8f8f9; border-radius: 4px;">
@@ -394,7 +394,7 @@
             </div>
             <div slot="footer">
                 <i-button type="text" @click="closeImport" style="color: #808695">取消</i-button>
-                <i-button type="primary" :loading="importing" :disabled="!canImport" @click="doImportPdf">生成并导入</i-button>
+                <i-button type="primary" :loading="importing" :disabled="!canImport" @click="doImportBank">生成并导入</i-button>
             </div>
         </Modal>
         <Modal v-model="modeConfigVisible" title="自定义答题模式" :mask-closable="false">
@@ -604,13 +604,13 @@
                     this.jsonList = banks.filter((x) => hidden.indexOf(x.id) === -1);
                 },
                 getBankDescribe(item) {
-                    const pdfName = item && item.pdfName ? String(item.pdfName) : '';
+                    const sourceName = item && (item.sourceFileName || item.pdfName) ? String(item.sourceFileName || item.pdfName) : '';
                     const count = typeof item.count === 'number' ? item.count : null;
-                    if (pdfName && typeof count === 'number') {
-                        return `${pdfName}（共 ${count} 题）`;
+                    if (sourceName && typeof count === 'number') {
+                        return `${sourceName}（共 ${count} 题）`;
                     }
-                    if (pdfName) {
-                        return pdfName;
+                    if (sourceName) {
+                        return sourceName;
                     }
                     return item && item.describe ? item.describe : '';
                 },
@@ -662,7 +662,7 @@
                     this.importFile = null;
                     this.importName = '';
                     this.$nextTick(() => {
-                        const input = this.$refs && this.$refs.pdfInput ? this.$refs.pdfInput : null;
+                        const input = this.$refs && this.$refs.importInput ? this.$refs.importInput : null;
                         if (input) {
                             input.value = '';
                         }
@@ -674,13 +674,13 @@
                     }
                     this.importVisible = false;
                 },
-                triggerPdfPick() {
-                    const input = this.$refs && this.$refs.pdfInput ? this.$refs.pdfInput : null;
+                triggerImportPick() {
+                    const input = this.$refs && this.$refs.importInput ? this.$refs.importInput : null;
                     if (input) {
                         input.click();
                     }
                 },
-                onPdfFileChange(e) {
+                onImportFileChange(e) {
                     const files = e && e.target ? e.target.files : null;
                     this.importFile = files && files.length ? files[0] : null;
                 },
@@ -926,12 +926,93 @@
                     const multiItems = multiText ? this.parseChoiceSection(multiText, 'multi', 'M', prefix) : [];
                     return judgeItems.concat(singleItems, multiItems);
                 },
-                async doImportPdf() {
+                isJsonImportFile(file) {
+                    const name = file && file.name ? String(file.name).toLowerCase() : '';
+                    const type = file && file.type ? String(file.type).toLowerCase() : '';
+                    return name.endsWith('.json') || type.indexOf('json') !== -1;
+                },
+                isPdfImportFile(file) {
+                    const name = file && file.name ? String(file.name).toLowerCase() : '';
+                    const type = file && file.type ? String(file.type).toLowerCase() : '';
+                    return name.endsWith('.pdf') || type === 'application/pdf';
+                },
+                getImportQuestionsPayload(jsonValue) {
+                    if (Array.isArray(jsonValue)) {
+                        return jsonValue;
+                    }
+                    if (jsonValue && typeof jsonValue === 'object') {
+                        if (Array.isArray(jsonValue.questions)) {
+                            return jsonValue.questions;
+                        }
+                        if (Array.isArray(jsonValue.data)) {
+                            return jsonValue.data;
+                        }
+                        if (Array.isArray(jsonValue.items)) {
+                            return jsonValue.items;
+                        }
+                    }
+                    return null;
+                },
+                normalizeImportedQuestion(item, index, bankId) {
+                    const question = item && typeof item === 'object' ? item : {};
+                    const title = this.normalizeText(question.title || question.question || '');
+                    const type = String(question.type || '').trim();
+                    const option = Array.isArray(question.option) ? question.option.map((x) => String(x || '').trim()).filter((x) => x) : [];
+                    const answer = String(question.answer || '').trim();
+                    if (!title || ['judge', 'single', 'multi'].indexOf(type) === -1 || !option.length || !answer) {
+                        throw new Error(`JSON第 ${index + 1} 题格式不正确，请确认包含 title、type、option、answer`);
+                    }
+                    return {
+                        id: String(question.id || `${bankId}-${index + 1}`),
+                        title,
+                        type,
+                        option,
+                        answer,
+                        analysis: question.analysis ? String(question.analysis) : ''
+                    };
+                },
+                async parseJsonImportFile(file, bankId) {
+                    const raw = await file.text();
+                    const jsonValue = JSON.parse(raw.replace(/^\uFEFF/, ''));
+                    const questions = this.getImportQuestionsPayload(jsonValue);
+                    if (!Array.isArray(questions) || !questions.length) {
+                        throw new Error('JSON未解析到题目，请使用题目数组，或包含 questions/data/items 数组的对象');
+                    }
+                    return questions.map((item, index) => this.normalizeImportedQuestion(item, index, bankId));
+                },
+                saveImportedBank(bankId, items, sourceFileName) {
+                    const meta = {
+                        id: bankId,
+                        name: bankId,
+                        describe: '',
+                        pdfName: sourceFileName,
+                        sourceFileName,
+                        count: items.length,
+                        file: bankId,
+                        source: 'import'
+                    };
+                    const store = this.getExtraStore();
+                    store.data[bankId] = items;
+                    store.banks = (store.banks || []).filter((b) => b && b.id !== bankId);
+                    store.banks.unshift(meta);
+                    this.saveExtraStore(store);
+
+                    if (!Array.isArray(window.BankList)) {
+                        window.BankList = [];
+                    }
+                    window.BankList = window.BankList.filter((b) => b && b.id !== bankId).concat([meta]);
+                    if (!window.QuestionData || typeof window.QuestionData !== 'object') {
+                        window.QuestionData = {};
+                    }
+                    window.QuestionData[bankId] = items;
+                    this.refreshJsonList();
+                },
+                async doImportBank() {
                     if (!this.canImport) {
                         return;
                     }
                     this.importing = true;
-                    this.importStatus = '正在解析PDF...';
+                    this.importStatus = '正在解析文件...';
                     try {
                         const bankId = this.normalizeBankId(this.importName);
                         if (!bankId) {
@@ -940,36 +1021,23 @@
                         if (this.hasBankId(bankId)) {
                             throw new Error('题库名称已存在，请换一个名称（题库名称将作为题库ID）');
                         }
-                        const text = await this.extractPdfText(this.importFile);
+                        let items = [];
+                        if (this.isJsonImportFile(this.importFile)) {
+                            this.importStatus = '正在解析JSON...';
+                            items = await this.parseJsonImportFile(this.importFile, bankId);
+                        } else if (this.isPdfImportFile(this.importFile)) {
+                            this.importStatus = '正在解析PDF...';
+                            const text = await this.extractPdfText(this.importFile);
+                            this.importStatus = '正在生成题库...';
+                            items = this.buildQuestionsFromText(text, bankId);
+                        } else {
+                            throw new Error('请选择PDF或JSON文件');
+                        }
                         this.importStatus = '正在生成题库...';
-                        const items = this.buildQuestionsFromText(text, bankId);
                         if (!items.length) {
                             throw new Error('未解析到题目：已读取PDF文本，但未匹配到分节或题目结构（请确认包含“一、判断题/二、选择题/三、选择题”等标题，且题目含选项A、B、C、D与答案标注）');
                         }
-                        const meta = {
-                            id: bankId,
-                            name: bankId,
-                            describe: '',
-                            pdfName: this.importFile ? this.importFile.name : '',
-                            count: items.length,
-                            file: bankId,
-                            source: 'import'
-                        };
-                        const store = this.getExtraStore();
-                        store.data[bankId] = items;
-                        store.banks = (store.banks || []).filter((b) => b && b.id !== bankId);
-                        store.banks.unshift(meta);
-                        this.saveExtraStore(store);
-
-                        if (!Array.isArray(window.BankList)) {
-                            window.BankList = [];
-                        }
-                        window.BankList = window.BankList.filter((b) => b && b.id !== bankId).concat([meta]);
-                        if (!window.QuestionData || typeof window.QuestionData !== 'object') {
-                            window.QuestionData = {};
-                        }
-                        window.QuestionData[bankId] = items;
-                        this.refreshJsonList();
+                        this.saveImportedBank(bankId, items, this.importFile ? this.importFile.name : '');
                         this.importStatus = `生成成功：共 ${items.length} 题，已加入首页题库列表`;
                         try {
                             this.$Message.success('题库已生成并加入列表');
